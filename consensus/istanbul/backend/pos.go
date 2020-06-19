@@ -40,7 +40,19 @@ import (
 )
 
 func (sb *Backend) printUptimes(header *types.Header, state *state.StateDB) {
-	
+	epoch := istanbul.GetEpochNumber(header.Number.Uint64(), sb.EpochSize())
+	logger := sb.logger.New("func", "Backend.updateValidatorScores", "blocknum", header.Number.Uint64(), "epoch", epoch, "epochsize", sb.EpochSize(), "window", sb.LookbackWindow())
+	logger.Trace("Updating validator scores")
+
+	accumulated := rawdb.ReadAccumulatedEpochUptime(sb.db, epoch)
+	if accumulated == nil {
+		return
+	}
+
+	for i, entry := range accumulated.Entries {
+		val_logger := logger.New("scoreTally", entry.ScoreTally, "index", i)
+		val_logger.Info("Uptime")
+	}	
 }
 
 func (sb *Backend) distributeEpochRewards(header *types.Header, state *state.StateDB) error {
@@ -53,7 +65,7 @@ func (sb *Backend) distributeEpochRewards(header *types.Header, state *state.Sta
 	defer sb.rewardDistributionTimer.UpdateSince(start)
 	logger := sb.logger.New("func", "Backend.distributeEpochPaymentsAndRewards", "blocknum", header.Number.Uint64())
 
-	printUptimes(header, state)
+	sb.printUptimes(header, state)
 
 	// Check if reward distribution has been frozen and return early without error if it is.
 	if frozen, err := freezer.IsFrozen(params.EpochRewardsRegistryId, header, state); err != nil {
@@ -162,7 +174,7 @@ func (sb *Backend) updateValidatorScores(header *types.Header, state *state.Stat
 			break
 		}
 		val_logger := logger.New("scoreTally", entry.ScoreTally, "denominator", denominator, "index", i, "address", valSet[i].Address())
-		val_logger.log("Uptime")
+		val_logger.Info("Uptime")
 
 		if entry.ScoreTally > denominator {
 			val_logger.Error("ScoreTally exceeds max possible")
