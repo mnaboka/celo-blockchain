@@ -1326,6 +1326,38 @@ func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.
 	return bc.writeBlockWithState(block, receipts, state)
 }
 
+func (bc *BlockChain) checkUptimes(state *state.StateDB, epochNum uint64) error {
+	uptime := rawdb.ReadAccumulatedEpochUptime(bc.db, epochNum)
+	currentBlock := bc.CurrentBlock().NumberU64()
+
+	log.Info("Checking uptimes", "num", currentBlock)
+	if uptime != nil {
+		log.Info("Last block", "last", uptime.LatestBlock)
+	}
+	if uptime == nil || uptime.LatestBlock < currentBlock {
+		uptime = nil
+		epochSize := bc.chainConfig.Istanbul.Epoch
+		firstBlock, _ := istanbul.GetEpochFirstBlockNumber(epochNum, epochSize)
+		if firstBlock == currentBlock {
+			return nil
+		}
+		log.Warn("Missing blocks from uptimes, recomputing", "first", firstBlock)
+		for i := firstBlock+1; i <= currentBlock; i++ {
+			log.Info("Reading block", "num", i)
+			block := bc.GetBlockByNumber(i)
+			extra, err := types.ExtractIstanbulExtra(block.Header())
+			if err != nil {
+				log.Error("Unable to extract istanbul extra", "func", "WriteBlockWithState", "blocknum", block.NumberU64(), "epoch", epochNum)
+				return errors.New("could not extract block header extra")
+			}
+			signedValidatorsBitmap := extra.ParentAggregatedSeal.Bitmap
+			uptime = updateUptime(uptime, i, signedValidatorsBitmap, bc.chainConfig.Istanbul.LookbackWindow, epochNum, epochSize)
+		}
+		rawdb.WriteAccumulatedEpochUptime(bc.db, epochNum, uptime)
+	}
+	return nil
+}
+
 // writeBlockWithState writes the block and all associated state to the database,
 // but is expects the chain mutex to be held.
 func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.Receipt, state *state.StateDB) (status WriteStatus, err error) {
@@ -1336,6 +1368,8 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	// TODO find a better way of checking if it's istanbul
 	if _, isIstanbul := bc.engine.(consensus.Istanbul); isIstanbul {
 
+		log.Info("Updating uptimes", "num", block.NumberU64())
+
 		if hash := bc.GetCanonicalHash(block.NumberU64()); (hash != common.Hash{} && hash != block.Hash()) {
 			log.Error("Found two blocks with same height", "old", hash, "new", block.Hash())
 		}
@@ -1344,6 +1378,10 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 		// We can ignore updating the tally for that block.
 		if !istanbul.IsFirstBlockOfEpoch(block.NumberU64(), bc.chainConfig.Istanbul.Epoch) {
 			epochNum := istanbul.GetEpochNumber(block.NumberU64(), bc.chainConfig.Istanbul.Epoch)
+
+			if err := bc.checkUptimes(state, epochNum); err != nil {
+				return NonStatTy, err
+			}
 
 			// Get the bitmap from the previous block
 			extra, err := types.ExtractIstanbulExtra(block.Header())

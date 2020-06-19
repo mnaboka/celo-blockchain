@@ -39,6 +39,10 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
+func (sb *Backend) printUptimes(header *types.Header, state *state.StateDB) {
+	
+}
+
 func (sb *Backend) distributeEpochRewards(header *types.Header, state *state.StateDB) error {
 
 	if sb.chain.Config().NoMintGold {
@@ -48,6 +52,8 @@ func (sb *Backend) distributeEpochRewards(header *types.Header, state *state.Sta
 	start := time.Now()
 	defer sb.rewardDistributionTimer.UpdateSince(start)
 	logger := sb.logger.New("func", "Backend.distributeEpochPaymentsAndRewards", "blocknum", header.Number.Uint64())
+
+	printUptimes(header, state)
 
 	// Check if reward distribution has been frozen and return early without error if it is.
 	if frozen, err := freezer.IsFrozen(params.EpochRewardsRegistryId, header, state); err != nil {
@@ -156,6 +162,7 @@ func (sb *Backend) updateValidatorScores(header *types.Header, state *state.Stat
 			break
 		}
 		val_logger := logger.New("scoreTally", entry.ScoreTally, "denominator", denominator, "index", i, "address", valSet[i].Address())
+		val_logger.log("Uptime")
 
 		if entry.ScoreTally > denominator {
 			val_logger.Error("ScoreTally exceeds max possible")
