@@ -102,6 +102,9 @@ type Engine interface {
 	// SealHash returns the hash of a block prior to it being sealed.
 	SealHash(header *types.Header) common.Hash
 
+	// SetProposerCh lets worker know its proposer role
+	SetProposerCh(chan struct{})
+
 	// GetValidators returns the list of current validators.
 	GetValidators(blockNumber *big.Int, headerHash common.Hash) []istanbul.Validator
 

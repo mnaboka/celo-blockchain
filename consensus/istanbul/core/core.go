@@ -69,6 +69,9 @@ type core struct {
 
 	// the timer to record consensus duration (from accepting a preprepare to final committed stage)
 	consensusTimer metrics.Timer
+
+	// the channel to inform worker of the proposer role
+	proposerCh chan struct{}
 }
 
 // New creates an Istanbul consensus core
@@ -427,9 +430,11 @@ func (c *core) startNewRound(round *big.Int) error {
 	}
 
 	// Generate next view and preprepare
-	var newView *istanbul.View
-	var roundChangeCertificate istanbul.RoundChangeCertificate
-	var request *istanbul.Request
+	var (
+		newView                *istanbul.View
+		roundChangeCertificate istanbul.RoundChangeCertificate
+		request                *istanbul.Request
+	)
 
 	valSet := c.current.ValidatorSet()
 	if roundChange {
@@ -457,6 +462,10 @@ func (c *core) startNewRound(round *big.Int) error {
 	// Calculate new proposer
 	nextProposer := c.selectProposer(valSet, headAuthor, newView.Round.Uint64())
 	err := c.resetRoundState(newView, valSet, nextProposer, roundChange)
+
+	if c.isProposer() {
+		c.proposerCh <- struct{}{}
+	}
 
 	if err != nil {
 		return err
@@ -700,4 +709,8 @@ func (c *core) verifyProposal(proposal istanbul.Proposal) (time.Duration, error)
 
 		return duration, err
 	}
+}
+
+func (c *core) SetProposerCh(proposerCh chan struct{}) {
+	c.proposerCh = proposerCh
 }

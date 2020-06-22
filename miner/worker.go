@@ -154,6 +154,7 @@ type worker struct {
 	exitCh             chan struct{}
 	resubmitIntervalCh chan time.Duration
 	resubmitAdjustCh   chan *intervalAdjust
+	proposerCh         chan struct{}
 
 	current     *environment       // An environment for current running cycle.
 	unconfirmed *unconfirmedBlocks // A set of locally mined blocks pending canonicalness confirmations.
@@ -221,6 +222,9 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus
 		log.Warn("Sanitizing miner recommit interval", "provided", recommit, "updated", minRecommitInterval)
 		recommit = minRecommitInterval
 	}
+
+	worker.proposerCh = make(chan struct{})
+	worker.engine.SetProposerCh(worker.proposerCh)
 
 	go worker.mainLoop()
 	go worker.newWorkLoop(recommit)
@@ -376,7 +380,12 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 			headNumber := head.Block.NumberU64()
 			clearPending(headNumber)
 			timestamp = time.Now().Unix()
-			commit(false, commitInterruptNewHead)
+			select {
+			case <-w.proposerCh:
+				commit(false, commitInterruptNewHead)
+			default:
+				log.Info("Not the proposer of the sequence, skipped proposing")
+			}
 
 		case <-timer.C:
 			// If mining is running resubmit a new work cycle periodically to pull in
