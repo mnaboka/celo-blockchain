@@ -1334,6 +1334,9 @@ func (bc *BlockChain) ReadAccumulatedEpochUptime(state *state.StateDB, epoch uin
 }
 
 func (bc *BlockChain) CheckUptimes(state *state.StateDB, header *types.Header) error {
+	if bc.chainConfig == nil || bc.chainConfig.Istanbul == nil || bc.chainConfig.Istanbul.Epoch == 0 {
+		return nil
+	}
 	epoch := istanbul.GetEpochNumber(header.Number.Uint64(), bc.chainConfig.Istanbul.Epoch)
 	return bc.checkUptimes(state, epoch)
 }
