@@ -1326,6 +1326,18 @@ func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.
 	return bc.writeBlockWithState(block, receipts, state)
 }
 
+func (bc *BlockChain) ReadAccumulatedEpochUptime(state *state.StateDB, epoch uint64) (*istanbul.Uptime, error) {
+	if err := bc.checkUptimes(state, epoch); err != nil {
+		return nil, err
+	}
+	return rawdb.ReadAccumulatedEpochUptime(bc.db, epoch), nil
+}
+
+func (bc *BlockChain) CheckUptimes(state *state.StateDB, header *types.Header) error {
+	epoch := istanbul.GetEpochNumber(header.Number.Uint64(), bc.chainConfig.Istanbul.Epoch)
+	return bc.checkUptimes(state, epoch)
+}
+
 func (bc *BlockChain) checkUptimes(state *state.StateDB, epochNum uint64) error {
 	uptime := rawdb.ReadAccumulatedEpochUptime(bc.db, epochNum)
 	currentBlock := bc.CurrentBlock().NumberU64()
@@ -1353,7 +1365,9 @@ func (bc *BlockChain) checkUptimes(state *state.StateDB, epochNum uint64) error 
 			signedValidatorsBitmap := extra.ParentAggregatedSeal.Bitmap
 			uptime = updateUptime(uptime, i, signedValidatorsBitmap, bc.chainConfig.Istanbul.LookbackWindow, epochNum, epochSize)
 		}
-		rawdb.WriteAccumulatedEpochUptime(bc.db, epochNum, uptime)
+		if uptime != nil {
+			rawdb.WriteAccumulatedEpochUptime(bc.db, epochNum, uptime)
+		}
 	}
 	return nil
 }

@@ -86,6 +86,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	}
 	// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)
 	statedb.Prepare(common.Hash{}, block.Hash(), len(block.Transactions()))
+	p.bc.CheckUptimes(statedb, header)
 	p.engine.Finalize(p.bc, header, statedb, block.Transactions())
 
 	if len(statedb.GetLogs(common.Hash{})) > 0 {
