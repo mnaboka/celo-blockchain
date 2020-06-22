@@ -1342,10 +1342,6 @@ func (bc *BlockChain) checkUptimes(state *state.StateDB, epochNum uint64) error 
 	uptime := rawdb.ReadAccumulatedEpochUptime(bc.db, epochNum)
 	currentBlock := bc.CurrentBlock().NumberU64()
 
-	log.Info("Checking uptimes", "num", currentBlock)
-	if uptime != nil {
-		log.Info("Last block", "last", uptime.LatestBlock)
-	}
 	if uptime == nil || uptime.LatestBlock < currentBlock {
 		uptime = nil
 		epochSize := bc.chainConfig.Istanbul.Epoch
@@ -1353,9 +1349,9 @@ func (bc *BlockChain) checkUptimes(state *state.StateDB, epochNum uint64) error 
 		if firstBlock == currentBlock {
 			return nil
 		}
-		log.Warn("Missing blocks from uptimes, recomputing", "first", firstBlock)
-		for i := firstBlock+1; i <= currentBlock; i++ {
-			log.Info("Reading block", "num", i)
+		log.Debug("Missing blocks from uptimes, recomputing", "first", firstBlock)
+		for i := firstBlock + 1; i <= currentBlock; i++ {
+			log.Trace("Reading block", "num", i)
 			block := bc.GetBlockByNumber(i)
 			extra, err := types.ExtractIstanbulExtra(block.Header())
 			if err != nil {
@@ -1382,7 +1378,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	// TODO find a better way of checking if it's istanbul
 	if _, isIstanbul := bc.engine.(consensus.Istanbul); isIstanbul {
 
-		log.Info("Updating uptimes", "num", block.NumberU64())
+		log.Trace("Updating uptimes", "num", block.NumberU64())
 
 		if hash := bc.GetCanonicalHash(block.NumberU64()); (hash != common.Hash{} && hash != block.Hash()) {
 			log.Error("Found two blocks with same height", "old", hash, "new", block.Hash())
